@@ -33,23 +33,31 @@ class Api{
     }
 
     // Handling people creating records
-    public function post($post){
-        $parsed = json_decode($post);
+    public function post($post)
+    {
+        $parsed = json_decode($post, true);
+        $data = $parsed['data'];
 
-        if($this->validateIsbn($parsed['isbn'])){
-            $this->insert($this->sanitize($parsed));
-            $this->sendResponse(201, json_encode($parsed));
-        }else{
-            $this->sendResponse(400, "Invalid ISBN");
+        if ($parsed['query_type'] = 'insert') {
+            if ($this->validateIsbn($data['isbn'])) {
+                try {
+                    $this->insert($data);
+                } catch (Exception $e) {
+                    // Exception handling here for failed query
+                    die("An error occurred with the query");
+                }
+
+                $this->sendResponse(201, json_encode($data));
+            } else {
+                $this->sendResponse(400, "Invalid ISBN");
+            }
+        }elseif($parsed['query_type'] = 'query'){
+            $result = $this->query(
+                $this->sanitize(json_decode($data))
+            );
+
+            $this->sendResponse(200, json_encode($result));
         }
-    }
-
-    // Handling requests for data
-    public function get($get){
-        $data = $this->query(
-            $this->sanitize(json_decode($get)));
-
-        $this->sendResponse(200, json_encode($data));
     }
 
     // Check ISBN has either 10 or 13 characters (both apparently valid) with any non-numeric characters stripped
@@ -67,7 +75,7 @@ class Api{
         $sanitized = array();
 
         foreach($raw as $key => $data){
-            $sanitized[$key] = mysqli_real_escape_string($data);
+            $sanitized[$key] = mysqli_real_escape_string($this->con, $data);
         }
 
         return $sanitized;
@@ -82,12 +90,11 @@ class Api{
 
     // Insert record
     protected function insert($data){
-        $sanitized = $this->sanitize(json_decode($data));
-
+        $sanitized = $this->sanitize($data);
         if($this->validateData($sanitized)) {
 
             $query = sprintf(
-                "insert into Books values (%s, %s, %s, %s, %s)",
+                "insert into Books values ('%s', '%s', '%s', '%s', '%s')",
                 $sanitized['isbn'],
                 $sanitized['title'],
                 $sanitized['author'],
@@ -98,15 +105,32 @@ class Api{
                 mysqli_query($this->con, $query);
             }catch(Exception $e){
                 // Some kind of error handling should go here, but it's not specified in the documentation
+                die(mysqli_error($this->con));
             }
+        }else {
+            // Some kind of error handling should go here, but it's not specified in the documentation
+            die("Data failed validation");
         }
-        // Some kind of error handling should go here, but it's not specified in the documentation
+    }
+
+    // Check all data is available
+    protected function validateData($data){
+        if(
+            isset($data['isbn']) and
+            isset($data['title']) and
+            isset($data['author']) and
+            isset($data['category']) and
+            isset($data['price'])
+        ){
+            return true;
+        }else{
+            return false;
+        }
     }
 
     // Send the response to the user
     protected function sendResponse($status, $json){
-        http_response_code(201);
-        echo http_response_code();
+        http_response_code($status);
         echo $json;
     }
 
@@ -121,3 +145,19 @@ if($_POST){
 if($_GET){
     $api->get($_GET);
 }
+
+
+// Test Data
+$testData = json_encode(Array(
+        'query_type' => "insert",
+        'data' => Array(
+            'isbn' => "1232567890",
+            'title' => "This is a test book",
+            'author' => "Random Author",
+            'category' => "none",
+            'price' => "9.99"
+        )
+    )
+);
+// Testing
+$api->post($testData);
