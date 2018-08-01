@@ -33,12 +33,12 @@ class Api{
     }
 
     // Handling people creating records
-    public function post($post)
+    public function process($post)
     {
         $parsed = json_decode($post, true);
         $data = $parsed['data'];
 
-        if ($parsed['query_type'] = 'insert') {
+        if ($parsed['query_type'] == 'insert') {
             if ($this->validateIsbn($data['isbn'])) {
                 try {
                     $this->insert($data);
@@ -49,14 +49,19 @@ class Api{
 
                 $this->sendResponse(201, json_encode($data));
             } else {
-                $this->sendResponse(400, "Invalid ISBN");
+                $this->sendResponse(400, '{"error": "Invalid ISBN"}');
             }
-        }elseif($parsed['query_type'] = 'query'){
+        }elseif($parsed['query_type'] == 'query'){
             $result = $this->query(
-                $this->sanitize(json_decode($data))
+                $this->sanitize($data)
             );
 
-            $this->sendResponse(200, json_encode($result));
+            if(!is_null($result)) {
+                $this->sendResponse(200, json_encode($result));
+            }else{
+                // Returning empty json rather than null to avoid issues with it not being parsed on the other end
+                $this->sendResponse(200, "{}");
+            }
         }
     }
 
@@ -77,7 +82,6 @@ class Api{
         foreach($raw as $key => $data){
             $sanitized[$key] = mysqli_real_escape_string($this->con, $data);
         }
-
         return $sanitized;
     }
 
@@ -86,6 +90,16 @@ class Api{
         $query = sprintf("select * from Books where %s", $this->parseQueryData($data));
         $result = mysqli_query($this->con, $query);
         return mysqli_fetch_assoc($result);
+    }
+
+    protected function parseQueryData($data){
+        $condition = "";
+
+        foreach($data as $key => $value){
+            $condition .= $key . " = " . "'" . $value . "'";
+        }
+
+        return $condition;
     }
 
     // Insert record
@@ -138,26 +152,20 @@ class Api{
 
 $api = new Api();
 
-if($_POST){
-    $api->post($_POST);
+if(isset($_POST['request'])){
+    $api->process($_POST['request']);
 }
 
-if($_GET){
-    $api->get($_GET);
-}
+
 
 
 // Test Data
 $testData = json_encode(Array(
-        'query_type' => "insert",
+        'query_type' => "query",
         'data' => Array(
-            'isbn' => "1232567890",
-            'title' => "This is a test book",
-            'author' => "Random Author",
-            'category' => "none",
-            'price' => "9.99"
+            'isbn' => "123456sa27890"
         )
     )
 );
 // Testing
-$api->post($testData);
+$api->process($testData);
