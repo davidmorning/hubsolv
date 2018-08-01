@@ -1,9 +1,5 @@
 <?php
 
-
-
-// API class
-
 class Api{
     private $con;
     private $host = "localhost";
@@ -36,37 +32,78 @@ class Api{
 
     }
 
+    // Handling people creating records
     public function post($post){
-        if($this->validate($post['isbn'])){
-            $this->insert($this->sanitize($post));
-            $this->sendResponse(201, json_encode($post));
+        $parsed = json_decode($post);
+
+        if($this->validateIsbn($parsed['isbn'])){
+            $this->insert($this->sanitize($parsed));
+            $this->sendResponse(201, json_encode($parsed));
+        }else{
+            $this->sendResponse(400, "Invalid ISBN");
         }
     }
 
+    // Handling requests for data
     public function get($get){
-        $data = $this->query($this->sanitize($get));
+        $data = $this->query(
+            $this->sanitize(json_decode($get)));
 
         $this->sendResponse(200, json_encode($data));
     }
 
-    protected function sanitize($post){
+    // Check ISBN has either 10 or 13 characters (both apparently valid) with any non-numeric characters stripped
+    protected function validateIsbn($isbn){
+        $stripped = preg_replace("/[^0-9]/", "", $isbn );
+        if(strlen($stripped) == 13 or strlen($stripped) == 10){
+            return true;
+        }else{
+            return false;
+        }
+    }
+
+    // Sanitize data before it's passed to a query
+    protected function sanitize($raw){
         $sanitized = array();
 
-        foreach($post as $key => $data){
+        foreach($raw as $key => $data){
             $sanitized[$key] = mysqli_real_escape_string($data);
         }
 
         return $sanitized;
     }
 
+    // Request data
     protected function query($data){
-
+        $query = sprintf("select * from Books where %s", $this->parseQueryData($data));
+        $result = mysqli_query($this->con, $query);
+        return mysqli_fetch_assoc($result);
     }
 
+    // Insert record
     protected function insert($data){
+        $sanitized = $this->sanitize(json_decode($data));
 
+        if($this->validateData($sanitized)) {
+
+            $query = sprintf(
+                "insert into Books values (%s, %s, %s, %s, %s)",
+                $sanitized['isbn'],
+                $sanitized['title'],
+                $sanitized['author'],
+                $sanitized['category'],
+                $sanitized['price']
+            );
+            try {
+                mysqli_query($this->con, $query);
+            }catch(Exception $e){
+                // Some kind of error handling should go here, but it's not specified in the documentation
+            }
+        }
+        // Some kind of error handling should go here, but it's not specified in the documentation
     }
 
+    // Send the response to the user
     protected function sendResponse($status, $json){
         http_response_code(201);
         echo http_response_code();
