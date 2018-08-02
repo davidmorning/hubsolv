@@ -152,20 +152,7 @@ class Api{
 
 $api = new Api();
 
+// JSON request is stored in the "request" post variable
 if(isset($_POST['request'])){
     $api->process($_POST['request']);
 }
-
-
-
-
-// Test Data
-$testData = json_encode(Array(
-        'query_type' => "query",
-        'data' => Array(
-            'isbn' => "123456sa27890"
-        )
-    )
-);
-// Testing
-$api->process($testData);
